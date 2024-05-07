@@ -6,7 +6,7 @@ class Data:
         self.enc = tiktoken.encoding_for_model("gpt-4")
         self.data = torch.tensor(self.encode(text), dtype=torch.long)
         self.unique_characters = sorted(list(set(text)))
-        self.vocabulary_size = len(self.unique_characters)
+        self.vocabulary_size = self.enc.max_token_value
         self.training_data = None
         self.testing_data = None
         self.__init_data()

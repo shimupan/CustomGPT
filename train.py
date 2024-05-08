@@ -6,7 +6,7 @@ from prepare_data import Data
 BLOCK_SIZE = 8
 BATCH_SIZE = 32
 N_EMBD = 32
-MAX_ITERATION = 5000
+MAX_ITERATION = 10000
 LEARNING_RATE = 1e-2
 DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
 EVAL_ITERS = 200
@@ -20,7 +20,6 @@ with open("test.txt","r",encoding="utf-8") as file:
     text = file.read()
 
 data = Data(text)
-print(data.vocabulary_size)
 
 # Generate batches of data from the testing data
 # With each testing block following an expected result

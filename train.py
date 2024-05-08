@@ -3,11 +3,12 @@ import torch.nn as nn
 from torch.nn import functional as F
 from prepare_data import Data
 
-BLOCK_SIZE = 8
+BLOCK_SIZE = 64
 BATCH_SIZE = 32
-N_EMBD = 32
+# tweak the above if you want better results
+N_EMBD = 256
 MAX_ITERATION = 5000
-LEARNING_RATE = 1e-2
+LEARNING_RATE = 3e-4
 DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
 EVAL_ITERS = 200
 DROPOUT = 0.2
@@ -84,7 +85,7 @@ class MultiHeadAttention(nn.Module):
     def __init__(self, num_heads, head_size):
         super().__init__()
         self.heads = nn.ModuleList([Head(head_size) for _ in range(num_heads)])
-        self.proj = nn.Linear(N_EMBD, N_EMBD)
+        self.proj = nn.Linear(head_size * num_heads, N_EMBD)
         self.dropout = nn.Dropout(DROPOUT)
         
     def forward(self,x):
@@ -135,7 +136,6 @@ class GenerativePretrainedTransformer(nn.Module):
             Block(N_EMBD, n_head=4),
             Block(N_EMBD, n_head=4),
             Block(N_EMBD, n_head=4),
-            nn.LayerNorm(N_EMBD)
         )
         self.ln3 = nn.LayerNorm(N_EMBD)
         self.lm_head = nn.Linear(N_EMBD, data.vocabulary_size)
@@ -199,4 +199,4 @@ for iter in range(MAX_ITERATION):
 # generate from the model
 context = torch.zeros((1, 1), dtype=torch.long, device=DEVICE)
 print(data.decode(m.generate(context, max_new_tokens=500)[0].tolist()))
-    
+open('result.txt', 'w').write(data.decode(m.generate(context, max_new_tokens=10000)[0].tolist()))

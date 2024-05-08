@@ -6,10 +6,11 @@ from prepare_data import Data
 BLOCK_SIZE = 8
 BATCH_SIZE = 32
 N_EMBD = 32
-MAX_ITERATION = 10000
+MAX_ITERATION = 5000
 LEARNING_RATE = 1e-2
 DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
 EVAL_ITERS = 200
+DROPOUT = 0.2
 
 torch.manual_seed(1)
 
@@ -60,7 +61,8 @@ class Head(nn.Module):
         self.query = nn.Linear(N_EMBD, head_size, bias=False)
         self.value = nn.Linear(N_EMBD, head_size, bias=False)
         self.register_buffer('tril', torch.tril(torch.ones(BLOCK_SIZE, BLOCK_SIZE)))
-    
+        self.dropout = nn.Dropout(DROPOUT)
+        
     def forward(self, x):
         B,T,C = x.shape
         k = self.key(x)
@@ -71,6 +73,7 @@ class Head(nn.Module):
         # Decoder Block
         weight = weight.masked_fill(self.tril[:T,:T] == 0, float('-inf'))
         weight = F.softmax(weight, dim=-1)
+        weight = self.dropout(weight)
         v = self.value(x)
         out = weight @ v
         return out
@@ -81,18 +84,60 @@ class MultiHeadAttention(nn.Module):
     def __init__(self, num_heads, head_size):
         super().__init__()
         self.heads = nn.ModuleList([Head(head_size) for _ in range(num_heads)])
-
+        self.proj = nn.Linear(N_EMBD, N_EMBD)
+        self.dropout = nn.Dropout(DROPOUT)
+        
     def forward(self,x):
-        return torch.cat([h(x) for h in self.heads], dim=-1)   
+        return self.dropout(
+                self.proj(
+                 torch.cat([h(x) for h in self.heads], dim=-1)
+                 )
+                )  
 
-class BigramLanguageModel(nn.Module):
+class FeedForward(nn.Module):
+    
+    def __init__(self, n_embd):
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.Linear(n_embd, 4 * n_embd),
+            nn.ReLU(),
+            nn.Linear(4 * n_embd, n_embd),
+            nn.Dropout(DROPOUT)
+        )
+    
+    def forward(self, s):
+        return self.net(s)
+
+# Transformer Block
+class Block(nn.Module):
+    
+    def  __init__(self, n_embed, n_head):
+        super().__init__()
+        head_size = n_embed // n_head
+        self.sa = MultiHeadAttention(n_head, head_size)
+        self.feed_forward = FeedForward(n_embed)
+        self.ln1 = nn.LayerNorm(n_embed)
+        self.ln2 = nn.LayerNorm(n_embed)
+        
+    def forward(self, s):
+        s = s + self.sa(self.ln1(s))
+        s = s + self.feed_forward(self.ln2(s))
+        return s
+
+class GenerativePretrainedTransformer(nn.Module):
 
     def __init__(self):
         super().__init__()
 
         self.token_embedding_table = nn.Embedding(data.vocabulary_size, N_EMBD)
         self.position_embedding_table = nn.Embedding(BLOCK_SIZE, N_EMBD)
-        self.sa_head = MultiHeadAttention(4,N_EMBD//4)
+        self.block = nn.Sequential(
+            Block(N_EMBD, n_head=4),
+            Block(N_EMBD, n_head=4),
+            Block(N_EMBD, n_head=4),
+            nn.LayerNorm(N_EMBD)
+        )
+        self.ln3 = nn.LayerNorm(N_EMBD)
         self.lm_head = nn.Linear(N_EMBD, data.vocabulary_size)
     
     def forward(self, idx, targets=None):
@@ -101,7 +146,8 @@ class BigramLanguageModel(nn.Module):
         tok_emb = self.token_embedding_table(idx)
         pos_emb = self.position_embedding_table(torch.arange(T, device=DEVICE))
         x = tok_emb + pos_emb
-        x = self.sa_head(x)
+        x = self.block(x)
+        x = self.ln3(x)
         logits = self.lm_head(x)
 
         if targets is None:
@@ -130,7 +176,7 @@ class BigramLanguageModel(nn.Module):
             idx = torch.cat((idx, idx_next), dim=1) # (B, T+1)
         return idx
 
-model = BigramLanguageModel()
+model = GenerativePretrainedTransformer()
 m = model.to(DEVICE)
 
 # Optimizer

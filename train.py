@@ -18,7 +18,7 @@ torch.manual_seed(1)
     
 
 text = None
-with open("test.txt","r",encoding="utf-8") as file:
+with open("output.txt","r",encoding="utf-8") as file:
     text = file.read()
 
 data = Data(text)
@@ -199,4 +199,4 @@ for iter in range(MAX_ITERATION):
 # generate from the model
 context = torch.zeros((1, 1), dtype=torch.long, device=DEVICE)
 print(data.decode(m.generate(context, max_new_tokens=500)[0].tolist()))
-open('result.txt', 'w').write(data.decode(m.generate(context, max_new_tokens=10000)[0].tolist()))
+open('result.txt', 'w', encoding='utf-8').write(data.decode(m.generate(context, max_new_tokens=10000)[0].tolist()))
